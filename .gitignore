@@ -6,7 +6,7 @@
 # not add to version control.
 
 # additional
-source_files/botToken.h
+config.py
 
 # Executables and debug files
 main
@@ -405,3 +405,8 @@ __pycache__/
 
 # OpenCover UI analysis results
 OpenCover/
+
+
+# Added by cargo
+
+/target
