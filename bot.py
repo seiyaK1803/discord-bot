@@ -43,16 +43,16 @@ async def on_reaction_add(reaction, user):
 
 # slash commands
 @bot.tree.command(name='reaction_block', description='block a user from reaction')
-async def reactionBlock(ctx: discord.interactions.Interaction):
-    await ctx.response.send_message('hi')
+async def reactionBlock(ctx: discord.interactions.Interaction, user: discord.Member):
+    await ctx.response.send_message(f'TODO block {user}')
 
 @bot.tree.command(name='reaction_unblock', description='unblock a user from reaction')
-async def reactionUnlock(ctx: discord.interactions.Interaction):
-    await ctx.response.send_message('hi2')
+async def reactionUnlock(ctx: discord.interactions.Interaction, user: discord.Member):
+    await ctx.response.send_message(f'TODO unblock {user}')
 
 @bot.tree.command(name='reaction_blocklist', description='list all blocked users')
 async def reactionBlocklist(ctx: discord.interactions.Interaction):
-    await ctx.response.send_message('hi3')
+    await ctx.response.send_message('TODO display a blocklist i guess?')
 
 # other commands (TODO delete these)
 @bot.command(name='ping')
