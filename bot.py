@@ -12,6 +12,9 @@ cluster = MongoClient(MONGODB_CLUSTER)
 db = cluster["userID"]
 scores_collection = db["reactScore"]
 
+messageDB = cluster["messageID"]
+message_collection = messageDB["reportID"]
+
 intents = discord.Intents.all()  # Use .all() to enable all intents
 bot = commands.Bot(command_prefix='gh!', intents=intents, help_command=None)
 
@@ -34,19 +37,16 @@ class embedView(discord.ui.View):
         if self.callback:
             await self.callback(self.message_id, useful=False)
 
-# Dictionary to track reported messages, report counts, and users who have reported
-reported_messages = {}
-
 # remove associated report data from the dictionary
 async def remove_report_data(message_id, useful=False):
-    if message_id in reported_messages:
-        report_data = reported_messages[message_id]
+    report_data = message_collection.find_one({"_id": message_id})
+    if report_data:
         reported_users = report_data.get("reported_users", [])
 
         for user_id in reported_users:
             await update_scores(user_id, useful)
 
-        del reported_messages[message_id]
+        message_collection.delete_one({"_id": message_id})
 
 # update score in database
 async def update_scores(user_id, useful=True):
@@ -70,16 +70,27 @@ async def on_reaction_add(reaction, user):
             message_id = reaction.message.id
 
             # Check if the message has already been reported
-            if message_id in reported_messages:
-                report_data = reported_messages[message_id]
+            report_data = message_collection.find_one({"_id": message_id})
+            if report_data:
                 count = report_data["count"]
                 reported_users = report_data["reported_users"]
                 report_message_id = report_data["report_message_id"]
-                
+
                 # Check if the user has already reported the message
                 if user.id not in reported_users:
                     reported_users.append(user.id)
                     count += 1
+
+                    # update the existing report message in the DB Database
+                    message_collection.update_one(
+                        {"_id": message_id},
+                        {
+                            "$set": {
+                                "count": count,
+                                "reported_users": reported_users,
+                            }
+                        }
+                    )
 
                     # Update the existing report message
                     report_message = await channel.fetch_message(report_message_id)
@@ -98,13 +109,8 @@ async def on_reaction_add(reaction, user):
             else:
                 # Create a unique ID for the report message
                 report_message_id = f'report_{message_id}_{user.id}'
-                reported_messages[message_id] = {
-                    "count": 1,
-                    "reported_users": [user.id],
-                    "report_message_id": report_message_id
-                }
                 count = 1
-                reported_users = reported_messages[message_id]["reported_users"]
+                reported_users = [user.id]
 
                 # Create Embed message with report count and all reporting users
                 embed = Embed(
@@ -119,8 +125,13 @@ async def on_reaction_add(reaction, user):
                 view = embedView(message_id, remove_report_data)
                 view.message = await channel.send(embed=embed, view=view)
 
-                # Update the report message ID in the dictionary
-                reported_messages[message_id]["report_message_id"] = view.message.id
+                # Update the report message ID in the MongoDB database
+                message_collection.insert_one({
+                    "_id": message_id,
+                    "count": count,
+                    "reported_users": reported_users,
+                    "report_message_id": view.message.id,
+                })
         
             # React with the bot
             await reaction.message.add_reaction(reaction.emoji)
@@ -137,7 +148,7 @@ async def reactionBlock(ctx: discord.interactions.Interaction, user: discord.Mem
     await ctx.response.defer()
     user_data = scores_collection.find_one({"_id": user.id})
     if not user_data:
-        scores_collection.insert({"_id": user.id, "score": MIN_SCORE_THRESHOLD - 1})
+        scores_collection.insert_one({"_id": user.id, "score": MIN_SCORE_THRESHOLD - 1})
     else:
         scores_collection.update_one({"_id": user.id}, {"$set": {"score": MIN_SCORE_THRESHOLD - 1}})
     await ctx.followup.send(f'{user.display_name} has been blocked from reactions.')
@@ -148,7 +159,7 @@ async def reactionUnlock(ctx: discord.interactions.Interaction, user: discord.Me
     await ctx.response.defer()
     user_data = scores_collection.find_one({"_id": user.id})
     if not user_data:
-        scores_collection.insert({"_id": user.id, "score": 0})
+        scores_collection.insert_one({"_id": user.id, "score": 0})
     else:
         scores_collection.update_one({"_id": user.id}, {"$set": {"score": 0}})
     await ctx.followup.send(f'{user.display_name} has been unblocked from reactions.')
