@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from discord import Embed
 from statistics import median
@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix='gh!', intents=intents, help_command=None)
 # define embed buttons
 class embedView(discord.ui.View):
     def __init__(self, message_id, callback):
-        super().__init__()
+        super().__init__(timeout=None)
         self.message_id = message_id
         self.callback = callback
     
@@ -114,14 +114,18 @@ def calculate_color(scores):
         
 # main reaction response
 @bot.event
-async def on_reaction_add(reaction, user):
-    if hasattr(reaction.emoji, 'id') and reaction.emoji.id == EMOTE and user != bot.user:
+async def on_raw_reaction_add(payload):
+    user = bot.get_user(payload.user_id)
+
+    if hasattr(payload.emoji, 'id') and payload.emoji.id == EMOTE and user != bot.user:
         # check the user's score in the database
         user_data = scores_collection.find_one({"_id": user.id })
+        message_channel = bot.get_channel(payload.channel_id)
+        message_id = payload.message_id
+        reacted_message = await message_channel.fetch_message(message_id)
 
         if not user_data or (user_data["score"] >= MIN_SCORE_THRESHOLD):
             channel = bot.get_channel(REPORT_CHANNEL)
-            message_id = reaction.message.id
 
             # Check if the message has already been reported
             if message_id in reported_messages:
@@ -142,18 +146,18 @@ async def on_reaction_add(reaction, user):
                     color = calculate_color(scores)
                     # Create Embed message with updated report count and all reporting users
                     embed = Embed(
-                        title=f"Reported Message in #{reaction.message.channel.name}",
+                        title=f"Reported Message in #{reacted_message.channel.name}",
                         color=color,
                     )
                     embed.add_field(name="Report Count", value=count, inline=False)
                     embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
-                    embed.add_field(name="Content", value=reaction.message.content, inline=False)
-                    embed.add_field(name="Go to Message", value=f"[Link to Message]({reaction.message.jump_url})", inline=False)
+                    embed.add_field(name="Content", value=reacted_message.content, inline=False)
+                    embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
                     await report_message.edit(embed=embed)
 
                     confirmation_embed = Embed(title="Report Confirmation",
-                                               description=f"Thank you for reporting [this message]({reaction.message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
+                                               description=f"Thank you for reporting [this message]({reacted_message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                                color=EMBED_COLOR)
                     await user.send(embed=confirmation_embed)
             else:
@@ -170,13 +174,13 @@ async def on_reaction_add(reaction, user):
                 color = calculate_color(scores)
                 # Create Embed message with report count and all reporting users
                 embed = Embed(
-                    title=f"Reported Message in #{reaction.message.channel.name}",
+                    title=f"Reported Message in #{reacted_message.channel.name}",
                     color=color,
                 )
                 embed.add_field(name="Report Count", value=count, inline=False)
                 embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
-                embed.add_field(name="Content", value=reaction.message.content, inline=False)
-                embed.add_field(name="Go to Message", value=f"[Link to Message]({reaction.message.jump_url})", inline=False)
+                embed.add_field(name="Content", value=reacted_message.content, inline=False)
+                embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
                 view = embedView(message_id, remove_report_data)
                 view.message = await channel.send(embed=embed, view=view)
@@ -185,15 +189,15 @@ async def on_reaction_add(reaction, user):
                 reported_messages[message_id]["report_message_id"] = view.message.id
 
                 confirmation_embed = Embed(title="Report Confirmation",
-                                           description=f"Thank you for reporting [this message]({reaction.message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
+                                           description=f"Thank you for reporting [this message]({reacted_message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                            color=EMBED_COLOR)
                 await user.send(embed=confirmation_embed)
-        
+
             # React with the bot
-            await reaction.message.add_reaction(reaction.emoji)
+            await reacted_message.add_reaction(payload.emoji)
 
         # Remove the user's reaction
-        await reaction.remove(user)
+        await reacted_message.remove_reaction(payload.emoji, user)
         
 
 
