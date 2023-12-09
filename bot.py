@@ -76,9 +76,17 @@ async def remove_report_data(message_id, useful=False):
     if message_id in reported_messages:
         report_data = reported_messages[message_id]
         reported_users = report_data.get("reported_users", [])
+        channel_id = report_data.get("channel_id")
 
         for user_id in reported_users:
             await update_scores(user_id, useful)
+
+        # Remove the bot's reaction from the reported message
+        if channel_id:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                report_message = await channel.fetch_message(message_id)
+                await report_message.clear_reaction(bot.get_emoji(EMOTE))
 
         if useful:
             await send_useful_confirmation(message_id)
@@ -166,7 +174,8 @@ async def on_raw_reaction_add(payload):
                 reported_messages[message_id] = {
                     "count": 1,
                     "reported_users": [user.id],
-                    "report_message_id": report_message_id
+                    "report_message_id": report_message_id,
+                    "channel_id": reacted_message.channel.id
                 }
                 count = 1
                 reported_users = reported_messages[message_id]["reported_users"]
@@ -208,7 +217,7 @@ async def reactionBlock(ctx: discord.interactions.Interaction, user: discord.Mem
     await ctx.response.defer()
     user_data = scores_collection.find_one({"_id": user.id})
     if not user_data:
-        scores_collection.insert({"_id": user.id, "score": MIN_SCORE_THRESHOLD - 1})
+        scores_collection.insert_one({"_id": user.id, "score": MIN_SCORE_THRESHOLD - 1})
     else:
         scores_collection.update_one({"_id": user.id}, {"$set": {"score": MIN_SCORE_THRESHOLD - 1}})
     await ctx.followup.send(f'{user.display_name} has been blocked from reactions.')
@@ -219,12 +228,12 @@ async def reactionUnlock(ctx: discord.interactions.Interaction, user: discord.Me
     await ctx.response.defer()
     user_data = scores_collection.find_one({"_id": user.id})
     if not user_data:
-        scores_collection.insert({"_id": user.id, "score": 0})
+        scores_collection.insert_one({"_id": user.id, "score": 0})
     else:
         scores_collection.update_one({"_id": user.id}, {"$set": {"score": 0}})
     await ctx.followup.send(f'{user.display_name} has been unblocked from reactions.')
 
-@bot.tree.command(name='reaction_check', description='chck if a user is blocked from reaction')
+@bot.tree.command(name='reaction_check', description='check if a user is blocked from reaction')
 @app_commands.default_permissions(administrator=True)
 async def reactionCheck(ctx: discord.interactions.Interaction, user: discord.Member):
     await ctx.response.defer()
@@ -233,6 +242,19 @@ async def reactionCheck(ctx: discord.interactions.Interaction, user: discord.Mem
         await ctx.followup.send(f'{user.display_name} is allowed to react. score={user_data["score"]}')
     else:
         await ctx.followup.send(f'{user.display_name} is blocked from reactions. score={user_data["score"]}')
+
+@bot.tree.command(name='reaction_set', description='set user score to a value')
+@app_commands.default_permissions(administrator=True)
+async def reactionSet(ctx: discord.interactions.Interaction, user: discord.Member, score: int):
+    await ctx.response.defer()
+    user_data = scores_collection.find_one({"_id": user.id})
+    prev_score = 0
+    if not user_data:
+        scores_collection.insert_one({"_id": user.id, "score": score})
+    else:
+        prev_score = user_data["score"]
+        scores_collection.update_one({"_id": user.id}, {"$set": {"score": score}})
+    await ctx.followup.send(f'{user.display_name} score updated from {prev_score} to {score}')
 
 @bot.tree.command(name='reaction_blocklist', description='list all blocked users')
 @app_commands.default_permissions(administrator=True)
