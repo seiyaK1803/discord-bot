@@ -161,6 +161,7 @@ async def on_raw_reaction_add(payload):
                     )
                     embed.add_field(name="Report Count", value=count, inline=False)
                     embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
+                    embed.add_field(name="Author", value=f"Message by: {reacted_message.author.mention} ({reacted_message.author.id})", inline=False)
                     embed.add_field(name="Content", value=reacted_message.content, inline=False)
                     embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
@@ -190,6 +191,7 @@ async def on_raw_reaction_add(payload):
                 )
                 embed.add_field(name="Report Count", value=count, inline=False)
                 embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
+                embed.add_field(name="Author", value=f"Message by: {reacted_message.author.mention} ({reacted_message.author.id})", inline=False)
                 embed.add_field(name="Content", value=reacted_message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
@@ -243,6 +245,7 @@ async def report(ctx: discord.Interaction, message: discord.Message):
                 )
                 embed.add_field(name="Report Count", value=count, inline=False)
                 embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
+                embed.add_field(name="Author", value=f"Message by: {message.author.mention} ({message.author.id})", inline=False)
                 embed.add_field(name="Content", value=message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
 
@@ -272,6 +275,7 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             )
             embed.add_field(name="Report Count", value=count, inline=False)
             embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
+            embed.add_field(name="Author", value=f"Message by: {message.author.mention} ({message.author.id})", inline=False)
             embed.add_field(name="Content", value=message.content, inline=False)
             embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
 
