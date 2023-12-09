@@ -290,7 +290,7 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             # React with the bot
             await message.add_reaction(bot.get_emoji(EMOTE))
     
-    await ctx.response.send_message(f"Thank you for reporting [this message]({message.jump_url})! You should have received a DM from the bot. If you did not, or have any other concerns, please send a ModMail <@{1059468645249589369}>.", ephemeral=True)
+    await ctx.response.send_message(f"Thank you for reporting [this message](<{message.jump_url}>)! You should have received a DM from the bot. If you did not, or have any other concerns, please send a ModMail <@{1059468645249589369}>.", ephemeral=True)
 
 # slash commands
 @bot.tree.command(name='reaction_block', description='block a user from reaction')
