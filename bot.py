@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from discord import Embed
+from statistics import median
 from config import TOKEN, EMOTE, REPORT_CHANNEL, EMBED_COLOR, MIN_SCORE_THRESHOLD
 
 import pymongo
@@ -57,7 +58,22 @@ async def update_scores(user_id, useful=True):
     increment = 1 if useful else -1
     scores_collection.update_one({"_id": user_id}, {"$inc": {"score": increment}})
     
-
+# calculate median score and determine color
+def calculate_color(scores):
+    median_score = median(scores)
+    if median_score >= 0:
+        # Calculate gradient between green and white based on the median score
+        r = int(255 * (1 - median_score / 10))
+        g = 255
+        b = int(255 * (1 - median_score / 10))
+        return (r << 16) + (g << 8) + b
+    else:
+        # gradient between white and red
+        r = 255
+        g = int(255 * (1 + median_score / abs(MIN_SCORE_THRESHOLD)))
+        b = int(255 * (1 + median_score / abs(MIN_SCORE_THRESHOLD)))
+        return (r << 16) + (g << 8) + b
+        
 # main reaction response
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -84,10 +100,12 @@ async def on_reaction_add(reaction, user):
                     # Update the existing report message
                     report_message = await channel.fetch_message(report_message_id)
 
+                    scores = [scores_collection.find_one({"_id": user_id}).get("score", 0) for user_id in reported_users]
+                    color = calculate_color(scores)
                     # Create Embed message with updated report count and all reporting users
                     embed = Embed(
                         title=f"Reported Message in #{reaction.message.channel.name}",
-                        color=EMBED_COLOR,
+                        color=color,
                     )
                     embed.add_field(name="Report Count", value=count, inline=False)
                     embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
@@ -105,11 +123,12 @@ async def on_reaction_add(reaction, user):
                 }
                 count = 1
                 reported_users = reported_messages[message_id]["reported_users"]
-
+                scores = [scores_collection.find_one({"_id": user_id}).get("score", 0) for user_id in reported_users]
+                color = calculate_color(scores)
                 # Create Embed message with report count and all reporting users
                 embed = Embed(
                     title=f"Reported Message in #{reaction.message.channel.name}",
-                    color=EMBED_COLOR,
+                    color=color,
                 )
                 embed.add_field(name="Report Count", value=count, inline=False)
                 embed.add_field(name="Reported by", value=','.join([f"<@{user_id}>" for user_id in reported_users]), inline=False)
