@@ -5,7 +5,6 @@ from discord import Embed
 from statistics import median
 from config import TOKEN, EMOTE, REPORT_CHANNEL, EMBED_COLOR, MIN_SCORE_THRESHOLD
 
-import pymongo
 from pymongo import MongoClient
 from config import MONGODB_CLUSTER
 
@@ -38,6 +37,40 @@ class embedView(discord.ui.View):
 # Dictionary to track reported messages, report counts, and users who have reported
 reported_messages = {}
 
+# DM confirmation on Report Close
+async def send_useful_confirmation(message_id):
+    reporting_users = reported_messages[message_id].get("reported_users", [])
+    for user_id in reporting_users:
+        reporting_user = bot.get_user(user_id)
+        if reporting_user:
+            embed_title = "Report Closed"
+            embed_description = "Your report was acknowledged by the moderators. Thank you for your help in making the community a better place!"
+            confirmation_embed = Embed(
+                title=embed_title,
+                description=embed_description,
+                color=0x00FF00 # green
+            )
+            await reporting_user.send(embed=confirmation_embed)
+
+async def send_not_useful_confirmation(message_id):
+    reporting_users = reported_messages[message_id].get("reported_users", [])
+    for user_id in reporting_users:
+        reporting_user = bot.get_user(user_id)
+        if reporting_user:
+            user_data = scores_collection.find_one({"_id": user_id})
+            negative_score_warning = ""
+            if user_data and user_data["score"] < 0:
+                negative_score_warning = f"Abuse of the system may result in reporting privileges being taken away. You have {user_data['score'] - MIN_SCORE_THRESHOLD + 1} strikes left."
+            embed_title = "Report Closed"
+            embed_description = (f"Your report was reviewed. However, the moderators have declined to take action on this situation. This could happen for various reasons such as the report being suspected as a troll, witchhunt/bullying, or otherwise. Please contact ModMail <@{1059468645249589369}> if you believe there is a mistake. {negative_score_warning}")
+            confirmation_embed = Embed(
+                title=embed_title,
+                description=embed_description,
+                color=0xFF0000 # red
+            )
+            await reporting_user.send(embed=confirmation_embed)
+
+
 # remove associated report data from the dictionary
 async def remove_report_data(message_id, useful=False):
     if message_id in reported_messages:
@@ -46,6 +79,11 @@ async def remove_report_data(message_id, useful=False):
 
         for user_id in reported_users:
             await update_scores(user_id, useful)
+
+        if useful:
+            await send_useful_confirmation(message_id)
+        else:
+            await send_not_useful_confirmation(message_id)
 
         del reported_messages[message_id]
 
@@ -113,6 +151,11 @@ async def on_reaction_add(reaction, user):
                     embed.add_field(name="Go to Message", value=f"[Link to Message]({reaction.message.jump_url})", inline=False)
 
                     await report_message.edit(embed=embed)
+
+                    confirmation_embed = Embed(title="Report Confirmation",
+                                               description=f"Thank you for reporting [this message]({reaction.message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
+                                               color=EMBED_COLOR)
+                    await user.send(embed=confirmation_embed)
             else:
                 # Create a unique ID for the report message
                 report_message_id = f'report_{message_id}_{user.id}'
@@ -140,6 +183,11 @@ async def on_reaction_add(reaction, user):
 
                 # Update the report message ID in the dictionary
                 reported_messages[message_id]["report_message_id"] = view.message.id
+
+                confirmation_embed = Embed(title="Report Confirmation",
+                                           description=f"Thank you for reporting [this message]({reaction.message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
+                                           color=EMBED_COLOR)
+                await user.send(embed=confirmation_embed)
         
             # React with the bot
             await reaction.message.add_reaction(reaction.emoji)
