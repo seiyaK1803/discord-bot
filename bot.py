@@ -123,14 +123,16 @@ def calculate_color(scores):
 # main reaction response
 @bot.event
 async def on_raw_reaction_add(payload):
+    # Remove the user's reaction
     user = bot.get_user(payload.user_id)
+    message_id = payload.message_id
+    message_channel = bot.get_channel(payload.channel_id)
+    reacted_message = await message_channel.fetch_message(message_id)
 
     if hasattr(payload.emoji, 'id') and payload.emoji.id == EMOTE and user != bot.user:
+        await reacted_message.remove_reaction(payload.emoji, user)
         # check the user's score in the database
         user_data = scores_collection.find_one({"_id": user.id })
-        message_channel = bot.get_channel(payload.channel_id)
-        message_id = payload.message_id
-        reacted_message = await message_channel.fetch_message(message_id)
 
         if not user_data or (user_data["score"] >= MIN_SCORE_THRESHOLD):
             channel = bot.get_channel(REPORT_CHANNEL)
@@ -204,9 +206,6 @@ async def on_raw_reaction_add(payload):
 
             # React with the bot
             await reacted_message.add_reaction(payload.emoji)
-
-        # Remove the user's reaction
-        await reacted_message.remove_reaction(payload.emoji, user)
         
 # application command
 @bot.tree.context_menu(name='Report Message')
