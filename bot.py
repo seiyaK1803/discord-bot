@@ -135,6 +135,8 @@ async def on_raw_reaction_add(payload):
         user_data = scores_collection.find_one({"_id": user.id })
 
         if not user_data or (user_data["score"] >= MIN_SCORE_THRESHOLD):
+            if not user_data:
+                scores_collection.insert_one({"_id": user.id, "score": 0})
             channel = bot.get_channel(REPORT_CHANNEL)
 
             # Check if the message has already been reported
@@ -164,6 +166,11 @@ async def on_raw_reaction_add(payload):
                     embed.add_field(name="Author", value=f"Message by: {reacted_message.author.mention} ({reacted_message.author.id})", inline=False)
                     embed.add_field(name="Content", value=reacted_message.content, inline=False)
                     embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
+
+                    # Add image if the message has attachments
+                    if reacted_message.attachments:
+                        image_url = reacted_message.attachments[0].url
+                        embed.set_image(url=image_url)
 
                     await report_message.edit(embed=embed)
 
@@ -195,6 +202,11 @@ async def on_raw_reaction_add(payload):
                 embed.add_field(name="Content", value=reacted_message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
+                # Add image if the message has attachments
+                if reacted_message.attachments:
+                    image_url = reacted_message.attachments[0].url
+                    embed.set_image(url=image_url)
+
                 view = embedView(message_id, remove_report_data)
                 view.message = await channel.send(embed=embed, view=view)
 
@@ -219,6 +231,8 @@ async def report(ctx: discord.Interaction, message: discord.Message):
     user_data = scores_collection.find_one({"_id": user.id})
     
     if not user_data or (user_data["score"] >= MIN_SCORE_THRESHOLD):
+        if not user_data:
+            scores_collection.insert_one({"_id": user.id, "score": 0})
         channel = bot.get_channel(REPORT_CHANNEL)
         # check if this message has already been reported
         if message.id in reported_messages:
@@ -249,6 +263,11 @@ async def report(ctx: discord.Interaction, message: discord.Message):
                 embed.add_field(name="Content", value=message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
 
+                # Add image if the message has attachments
+            if message.attachments:
+                image_url = message.attachments[0].url
+                embed.set_image(url=image_url)
+
                 await report_message.edit(embed=embed)
 
                 confirmation_embed = Embed(title="Report Confirmation",
@@ -278,6 +297,11 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             embed.add_field(name="Author", value=f"Message by: {message.author.mention} ({message.author.id})", inline=False)
             embed.add_field(name="Content", value=message.content, inline=False)
             embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
+
+            # Add image if the message has attachments
+            if message.attachments:
+                image_url = message.attachments[0].url
+                embed.set_image(url=image_url)
 
             view = embedView(message.id, remove_report_data)
             view.message = await channel.send(embed=embed, view=view)
@@ -324,6 +348,8 @@ async def reactionCheck(ctx: discord.interactions.Interaction, user: discord.Mem
     await ctx.response.defer()
     user_data = scores_collection.find_one({"_id": user.id})
     if not user_data or user_data["score"] >= MIN_SCORE_THRESHOLD:
+        if not user_data:
+            scores_collection.insert_one({"_id": user.id, "score": 0})
         await ctx.followup.send(f'{user.display_name} is allowed to react. score={user_data["score"]}')
     else:
         await ctx.followup.send(f'{user.display_name} is blocked from reactions. score={user_data["score"]}')
