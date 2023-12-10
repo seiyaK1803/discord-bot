@@ -112,12 +112,20 @@ def calculate_color(scores):
         r = int(255 * (1 - median_score / 10))
         g = 255
         b = int(255 * (1 - median_score / 10))
+        # Ensure each RGB value is within the valid range
+        r = max(0, min(255, r))
+        g = max(0, min(255, g))
+        b = max(0, min(255, b))
         return (r << 16) + (g << 8) + b
     else:
         # gradient between white and red
         r = 255
         g = int(255 * (1 + median_score / abs(MIN_SCORE_THRESHOLD)))
         b = int(255 * (1 + median_score / abs(MIN_SCORE_THRESHOLD)))
+        # Ensure each RGB value is within the valid range
+        r = max(0, min(255, r))
+        g = max(0, min(255, g))
+        b = max(0, min(255, b))
         return (r << 16) + (g << 8) + b
         
 # main reaction response
@@ -150,6 +158,7 @@ async def on_raw_reaction_add(payload):
                 if user.id not in reported_users:
                     reported_users.append(user.id)
                     count += 1
+                    reported_messages[message_id]["count"] = count
 
                     # Update the existing report message
                     report_message = await channel.fetch_message(report_message_id)
@@ -257,6 +266,7 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             if user.id not in reported_users:
                 reported_users.append(user.id)
                 count += 1
+                reported_messages[message.id]["count"] = count
 
                 # update the existing report message
                 report_message = await channel.fetch_message(report_message_id)
