@@ -167,10 +167,16 @@ async def on_raw_reaction_add(payload):
                     embed.add_field(name="Content", value=reacted_message.content, inline=False)
                     embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
-                    # Add image if the message has attachments
-                    if reacted_message.attachments:
-                        image_url = reacted_message.attachments[0].url
-                        embed.set_image(url=image_url)
+                    # Add images if the message has attachments
+                    for attachment in reacted_message.attachments:
+                        image_url = attachment.url
+                        embed.add_field(name="Attachment", value=f"[Attachment Link]({image_url})", inline=False)
+
+                    # Check for stickers in the reacted message
+                    stickers = reacted_message.stickers
+                    if stickers:
+                        sticker_text = "\n".join([f"{sticker.name} ({sticker.id})" for sticker in stickers])
+                        embed.add_field(name="Stickers", value=sticker_text, inline=False)
 
                     await report_message.edit(embed=embed)
 
@@ -202,10 +208,16 @@ async def on_raw_reaction_add(payload):
                 embed.add_field(name="Content", value=reacted_message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({reacted_message.jump_url})", inline=False)
 
-                # Add image if the message has attachments
-                if reacted_message.attachments:
-                    image_url = reacted_message.attachments[0].url
-                    embed.set_image(url=image_url)
+                # Add images if the message has attachments
+                for attachment in reacted_message.attachments:
+                    image_url = attachment.url
+                    embed.add_field(name="Attachment", value=f"[Attachment Link]({image_url})", inline=False)
+
+                # Check for stickers in the reacted message
+                stickers = reacted_message.stickers
+                if stickers:
+                    sticker_text = "\n".join([f"{sticker.name} ({sticker.id})" for sticker in stickers])
+                    embed.add_field(name="Stickers", value=sticker_text, inline=False)
 
                 view = embedView(message_id, remove_report_data)
                 view.message = await channel.send(embed=embed, view=view)
@@ -263,10 +275,16 @@ async def report(ctx: discord.Interaction, message: discord.Message):
                 embed.add_field(name="Content", value=message.content, inline=False)
                 embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
 
-                # Add image if the message has attachments
-            if message.attachments:
-                image_url = message.attachments[0].url
-                embed.set_image(url=image_url)
+                # Add images if the message has attachments
+                for attachment in message.attachments:
+                    image_url = attachment.url
+                    embed.add_field(name="Attachment", value=f"[Attachment Link]({image_url})", inline=False)
+
+                # Check for stickers in the reacted message
+                stickers = message.stickers
+                if stickers:
+                    sticker_text = "\n".join([f"{sticker.name} ({sticker.id})" for sticker in stickers])
+                    embed.add_field(name="Stickers", value=sticker_text, inline=False)
 
                 await report_message.edit(embed=embed)
 
@@ -298,10 +316,16 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             embed.add_field(name="Content", value=message.content, inline=False)
             embed.add_field(name="Go to Message", value=f"[Link to Message]({message.jump_url})", inline=False)
 
-            # Add image if the message has attachments
-            if message.attachments:
-                image_url = message.attachments[0].url
-                embed.set_image(url=image_url)
+            # Add images if the message has attachments
+            for attachment in message.attachments:
+                image_url = attachment.url
+                embed.add_field(name="Attachment", value=f"[Attachment Link]({image_url})", inline=False)
+
+            # Check for stickers in the reacted message
+            stickers = message.stickers
+            if stickers:
+                sticker_text = "\n".join([f"{sticker.name} ({sticker.id})" for sticker in stickers])
+                embed.add_field(name="Stickers", value=sticker_text, inline=False)
 
             view = embedView(message.id, remove_report_data)
             view.message = await channel.send(embed=embed, view=view)
