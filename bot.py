@@ -1,7 +1,8 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from discord import Embed
+from discord.errors import NotFound
 from statistics import median
 from config import TOKEN, EMOTE, REPORT_CHANNEL, EMBED_COLOR, MIN_SCORE_THRESHOLD
 
@@ -34,6 +35,13 @@ class embedView(discord.ui.View):
         if self.callback:
             await self.callback(self.message_id, useful=False)
 
+async def can_dm_user(user: discord.User) -> bool:
+    try:
+        await user.send()
+    except discord.Forbidden:
+        return False
+    except discord.HTTPException:
+        return True
 # Dictionary to track reported messages, report counts, and users who have reported
 reported_messages = {}
 
@@ -50,7 +58,8 @@ async def send_useful_confirmation(message_id):
                 description=embed_description,
                 color=0x00FF00 # green
             )
-            await reporting_user.send(embed=confirmation_embed)
+            if await can_dm_user(reporting_user):
+                await reporting_user.send(embed=confirmation_embed)
 
 async def send_not_useful_confirmation(message_id):
     reporting_users = reported_messages[message_id].get("reported_users", [])
@@ -68,7 +77,8 @@ async def send_not_useful_confirmation(message_id):
                 description=embed_description,
                 color=0xFF0000 # red
             )
-            await reporting_user.send(embed=confirmation_embed)
+            if await can_dm_user(reporting_user):
+                await reporting_user.send(embed=confirmation_embed)
 
 
 # remove associated report data from the dictionary
@@ -81,19 +91,27 @@ async def remove_report_data(message_id, useful=False):
         for user_id in reported_users:
             await update_scores(user_id, useful)
 
-        # Remove the bot's reaction from the reported message
-        if channel_id:
-            channel = bot.get_channel(channel_id)
-            if channel:
-                report_message = await channel.fetch_message(message_id)
-                await report_message.clear_reaction(bot.get_emoji(EMOTE))
-
         if useful:
             await send_useful_confirmation(message_id)
         else:
             await send_not_useful_confirmation(message_id)
 
         del reported_messages[message_id]
+
+        # Remove the bot's reaction from the reported message
+        if channel_id:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    report_message = await channel.fetch_message(message_id)
+                    await report_message.clear_reaction(bot.get_emoji(EMOTE))
+                except NotFound:
+                    print(f"Reported message not found for message ID: {message_id}")
+
+    else:
+        print(f"Report Data not found for message ID: {message_id}")
+
+        
 
 # update score in database
 async def update_scores(user_id, useful=True):
@@ -192,7 +210,8 @@ async def on_raw_reaction_add(payload):
                     confirmation_embed = Embed(title="Report Confirmation",
                                                description=f"Thank you for reporting [this message]({reacted_message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                                color=EMBED_COLOR)
-                    await user.send(embed=confirmation_embed)
+                    if await can_dm_user(user):
+                        await user.send(embed=confirmation_embed)
             else:
                 # Create a unique ID for the report message
                 report_message_id = f'report_{message_id}_{user.id}'
@@ -237,7 +256,8 @@ async def on_raw_reaction_add(payload):
                 confirmation_embed = Embed(title="Report Confirmation",
                                            description=f"Thank you for reporting [this message]({reacted_message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                            color=EMBED_COLOR)
-                await user.send(embed=confirmation_embed)
+                if await can_dm_user(user):
+                    await user.send(embed=confirmation_embed)
 
             # React with the bot
             await reacted_message.add_reaction(payload.emoji)
@@ -301,7 +321,8 @@ async def report(ctx: discord.Interaction, message: discord.Message):
                 confirmation_embed = Embed(title="Report Confirmation",
                                            description=f"Thank you for reporting [this message]({message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                            color=EMBED_COLOR)
-                await user.send(embed=confirmation_embed)
+                if await can_dm_user(user):
+                    await user.send(embed=confirmation_embed)
         else:
             # Create a unique ID for the report message
             report_message_id = f'report_{message.id}_{user.id}'
@@ -346,7 +367,8 @@ async def report(ctx: discord.Interaction, message: discord.Message):
             confirmation_embed = Embed(title="Report Confirmation",
                                        description=f"Thank you for reporting [this message]({message.jump_url}). We will review your report as soon as possible. Feel free to send a ModMail <@{1059468645249589369}> if you have any further concerns.",
                                        color=EMBED_COLOR)
-            await user.send(embed=confirmation_embed)
+            if await can_dm_user(user):
+                await user.send(embed=confirmation_embed)
 
             # React with the bot
             await message.add_reaction(bot.get_emoji(EMOTE))
@@ -417,11 +439,51 @@ async def reactionBlocklist(ctx: discord.interactions.Interaction):
 
     await ctx.followup.send(embed=embed)
 
+# periodic task
+@tasks.loop(minutes=1)
+async def check_reported_messages_status():
+    for message_id in reported_messages.copy():
+        channel_id = reported_messages[message_id].get("channel_id")
+        if channel_id:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.fetch_message(message_id)
+                except NotFound:
+                    print(f"Reported message not found for message ID: {message_id}. Sending additional message...")
+                    # Handle the case where the reported message is deleted
+                    await send_additional_message_for_deleted_report(message_id)
+
+async def send_additional_message_for_deleted_report(message_id):
+    if message_id in reported_messages:
+        report_data = reported_messages[message_id]
+        channel_id = report_data.get("channel_id")
+        report_message_id = report_data.get("report_message_id")
+
+        if channel_id and report_message_id:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    # Check if the reported message is still deleted
+                    await channel.fetch_message(message_id)
+                except NotFound:
+                    # Reported message is deleted, send an additional message as a reply to the embed message
+                    report_channel = bot.get_channel(REPORT_CHANNEL)
+                    embed_message = await report_channel.fetch_message(report_message_id)
+
+                    # Customize the additional message content as needed
+                    additional_message_content = "This reported message was deleted!"
+
+                    await embed_message.reply(additional_message_content)
+
+                    print(f"Sent additional message for deleted reported message (ID: {message_id})")
+
 
 # startup routine
 @bot.event
 async def on_ready():
     await bot.tree.sync()
+    check_reported_messages_status.start()
     print(f'Logged in as {bot.user.name}')
 
 bot.run(TOKEN)
